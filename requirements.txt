@@ -3,5 +3,5 @@ uvicorn[standard]
 pydantic
 python-dotenv
 tldextract
-anthropic
-openai
+google-genai
+groq

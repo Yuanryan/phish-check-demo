@@ -15,9 +15,9 @@ output mode with a schema-validation safety net.
 2. **Static rules** (`app/rules.py`) — 6 cheap heuristics → a `rule_score` (0–100):
    auth failures, From/Reply-To domain mismatch, brand display-name spoofing, lookalike /
    high-risk TLDs, urgency/credential/financial keywords, deceptive URLs.
-3. **One LLM call** (`app/llm.py`) — forced to emit structured JSON
-   (`{score, risk_type, reasons[]}`), provider auto-detected from the API key prefix,
-   with a deterministic **mock fallback** so it runs with zero config.
+3. **One LLM call** (`app/llm.py`) — Gemini 2.5 Flash (primary) with Groq fallback;
+   forced structured JSON (`{score, risk_type, reasons[]}`), plus a deterministic
+   **mock fallback** so it runs with zero config.
 4. **Fuse** (`app/fusion.py`) — blend rule + LLM scores (with a high-confidence rule
    override) into the final verdict shown in the panel.
 
@@ -34,12 +34,10 @@ uvicorn app.main:app --reload
 
 Open <http://127.0.0.1:8000/>, click **Load BEC sample**, click **Check**.
 
-- **Zero-setup:** no `LLM_API_KEY` → the provider pill shows `Mock` and a deterministic
-  verdict appears. This is the "runs end-to-end with zero config" guarantee.
-- **Real LLM:** copy `.env.example` to `.env`, drop in a key
-  (`sk-ant-...` → Claude, `sk-...` → GPT), restart. Same paste now routes through the real
-  model — the pill shows `Claude` / `GPT` and reasons become model-generated, in the
-  **exact same structured shape**.
+- **Zero-setup:** no API keys in `.env` → the provider pill shows `Mock` and a
+  deterministic verdict appears.
+- **Real LLM:** copy `.env.example` to `.env`, add `GEMINI_API_KEY` (and optionally
+  `GROQ_API_KEY` for fallback). Restart — the pill shows `Gemini` / `Groq`.
 
 ## API
 
@@ -52,7 +50,7 @@ Open <http://127.0.0.1:8000/>, click **Load BEC sample**, click **Check**.
   "verdict_band": "low | medium | high",
   "summary": "...",
   "reasons": [ { "source": "rule|llm", "label", "detail", "severity" } ],
-  "provider": "anthropic | openai | mock",
+  "provider": "gemini | groq | mock",
   "rule_score": 0-100,
   "llm_score": 0-100,
   "parse_warnings": []

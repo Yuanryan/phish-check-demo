@@ -82,7 +82,7 @@ class AnalyzeResponse(BaseModel):
     verdict_band: Literal["low", "medium", "high"]
     summary: str
     reasons: List[ReasonOut]
-    provider: Literal["anthropic", "openai", "mock"]
+    provider: Literal["gemini", "groq", "mock"]
     rule_score: int = Field(ge=0, le=100)
     llm_score: int = Field(ge=0, le=100)
     parse_warnings: List[str] = []

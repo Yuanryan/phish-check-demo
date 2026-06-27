@@ -1,12 +1,11 @@
 """Provider-agnostic LLM client.
 
-One public function, `analyze_email(parsed, rule_hits)`, builds a structured prompt
-from the normalized email + fired rules, dispatches to the provider auto-detected from
-the API key prefix, validates the result against LLM_OUTPUT_SCHEMA, and returns a dict.
+Primary: Google Gemini 2.5 Flash (structured JSON via response_json_schema).
+Fallback: Groq (tries several free-tier models in order when Gemini fails).
+Last resort: deterministic mock (zero-config demo).
 
-Design goals (from the SOW): the LLM MUST return structured JSON, and the demo MUST run
-end-to-end with zero config (mock fallback when no key is present). Any provider error
-falls back to the deterministic mock so a live demo never dies mid-presentation.
+Any provider error or schema drift falls back down the chain so a live demo
+never dies mid-presentation.
 """
 
 import json
@@ -30,17 +29,31 @@ _SYSTEM_PROMPT = (
     "engineering, impersonation, and pretext."
 )
 
+# Groq free-tier models, best reasoning first. Override with GROQ_MODELS in .env.
+GROQ_MODEL_DEFAULTS = [
+    "llama-3.3-70b-versatile",   # strongest general reasoning on free tier
+    "openai/gpt-oss-120b",       # newer OSS model, good quality
+    "llama-3.1-8b-instant",      # fast last resort when rate-limited on larger models
+]
+
 
 def detect_provider() -> str:
-    """Return 'anthropic', 'openai', or 'mock' based on the LLM_API_KEY prefix."""
-    key = os.environ.get("LLM_API_KEY", "").strip()
-    if not key:
-        return "mock"
-    if key.startswith("sk-ant-"):  # check Anthropic FIRST — its keys also start with sk-
-        return "anthropic"
-    if key.startswith(("sk-proj-", "sk-")):
-        return "openai"
+    """Return configured primary provider for /health (not which served last request)."""
+    if os.environ.get("GEMINI_API_KEY", "").strip():
+        return "gemini"
+    if os.environ.get("GROQ_API_KEY", "").strip():
+        return "groq"
     return "mock"
+
+
+def _groq_models() -> List[str]:
+    raw = os.environ.get("GROQ_MODELS", "").strip()
+    if raw:
+        return [m.strip() for m in raw.split(",") if m.strip()]
+    single = os.environ.get("GROQ_MODEL", "").strip()
+    if single:
+        return [single]
+    return list(GROQ_MODEL_DEFAULTS)
 
 
 def _build_user_prompt(parsed: Dict, rule_hits: List[Dict]) -> str:
@@ -68,75 +81,97 @@ def _build_user_prompt(parsed: Dict, rule_hits: List[Dict]) -> str:
     )
 
 
+def _validate_verdict(data: Dict) -> Dict:
+    """Validate and return a clean dict; raises ValidationError on drift."""
+    return LLMVerdict.model_validate(data).model_dump()
+
+
 def analyze_email(parsed: Dict, rule_hits: List[Dict]) -> Dict:
     """Return a verdict dict matching LLM_OUTPUT_SCHEMA, plus a 'provider' field."""
-    provider = detect_provider()
     prompt = _build_user_prompt(parsed, rule_hits)
+    provider = "mock"
+    data: Dict | None = None
 
-    try:
-        if provider == "anthropic":
-            data = _analyze_anthropic(prompt)
-        elif provider == "openai":
-            data = _analyze_openai(prompt)
-        else:
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if gemini_key:
+        try:
+            data = _validate_verdict(_analyze_gemini(prompt))
+            provider = "gemini"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Gemini failed (%s); trying Groq fallback", exc)
+
+    if data is None and os.environ.get("GROQ_API_KEY", "").strip():
+        try:
+            data = _validate_verdict(_analyze_groq(prompt))
+            provider = "groq"
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Groq fallback failed (%s); using mock", exc)
+
+    if data is None:
+        data = _analyze_mock(parsed, rule_hits)
+        provider = "mock"
+    else:
+        try:
+            data = _validate_verdict(data)
+        except ValidationError as exc:
+            logger.warning("LLM output failed schema validation (%s); using mock", exc)
             data = _analyze_mock(parsed, rule_hits)
-    except Exception as exc:  # noqa: BLE001 - never let a provider error kill the demo
-        logger.warning("LLM provider %s failed (%s); falling back to mock", provider, exc)
-        provider = "mock"
-        data = _analyze_mock(parsed, rule_hits)
-
-    # Validate against the schema; on any drift, fall back to the mock so the
-    # "structured JSON only" promise stays true even if a provider misbehaves.
-    try:
-        LLMVerdict.model_validate(data)
-    except ValidationError as exc:
-        logger.warning("LLM output failed schema validation (%s); using mock", exc)
-        provider = "mock"
-        data = _analyze_mock(parsed, rule_hits)
+            provider = "mock"
 
     data["provider"] = provider
     return data
 
 
 # --- Provider adapters (SDKs imported lazily so a missing one never breaks startup) ---
-def _analyze_anthropic(prompt: str) -> Dict:
-    import anthropic
+def _analyze_gemini(prompt: str) -> Dict:
+    from google import genai
+    from google.genai import types
 
-    client = anthropic.Anthropic(api_key=os.environ["LLM_API_KEY"])
-    model = os.environ.get("LLM_MODEL", "claude-opus-4-8")
-    # messages.parse() forces JSON matching the Pydantic model and validates it.
-    # NOTE: no temperature/top_p — those are rejected (400) on Opus 4.8.
-    resp = client.messages.parse(
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    resp = client.models.generate_content(
         model=model,
-        max_tokens=1024,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}],
-        output_format=LLMVerdict,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=_SYSTEM_PROMPT,
+            response_mime_type="application/json",
+            response_json_schema=LLM_OUTPUT_SCHEMA,
+            temperature=0,
+        ),
     )
-    return resp.parsed_output.model_dump()
+    return json.loads(resp.text)
 
 
-def _analyze_openai(prompt: str) -> Dict:
-    import openai
+def _analyze_groq(prompt: str) -> Dict:
+    from groq import Groq
 
-    client = openai.OpenAI(api_key=os.environ["LLM_API_KEY"])
-    model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {"role": "user", "content": prompt},
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "phish_verdict",
-                "schema": LLM_OUTPUT_SCHEMA,
-                "strict": True,
-            },
-        },
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    json_instruction = (
+        _SYSTEM_PROMPT
+        + "\n\nRespond with ONLY valid JSON matching this schema exactly:\n"
+        + json.dumps(LLM_OUTPUT_SCHEMA, indent=2)
     )
-    return json.loads(resp.choices[0].message.content)
+    last_exc: Exception | None = None
+    for model in _groq_models():
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": json_instruction},
+                    {"role": "user", "content": prompt},
+                ],
+                response_format={"type": "json_object"},
+                temperature=0,
+                max_tokens=1024,
+            )
+            content = resp.choices[0].message.content
+            if not content:
+                raise ValueError("empty response")
+            return json.loads(content)
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            logger.warning("Groq model %s failed (%s); trying next", model, exc)
+    raise last_exc or RuntimeError("No Groq models configured")
 
 
 def _analyze_mock(parsed: Dict, rule_hits: List[Dict]) -> Dict:
@@ -145,9 +180,6 @@ def _analyze_mock(parsed: Dict, rule_hits: List[Dict]) -> Dict:
     rule_score = min(100, sum(h.get("weight", 0) for h in rule_hits))
     high = [h for h in rule_hits if h.get("severity") == "high"]
 
-    # Vote on risk type: each fired rule contributes its weight to the type it
-    # implies, so several aligned credential signals outweigh a lone auth-fail
-    # (which alone leans BEC). Falls back to Benign when nothing fired.
     if rule_hits:
         votes: Dict[str, int] = {}
         for h in rule_hits:
@@ -159,7 +191,6 @@ def _analyze_mock(parsed: Dict, rule_hits: List[Dict]) -> Dict:
     if risk_type not in RISK_TYPES:
         risk_type = "Spam"
 
-    # Mirror up to 3 fired rules as reasons; if none fired, say so.
     reasons = [
         {
             "label": h.get("label", "Heuristic finding"),

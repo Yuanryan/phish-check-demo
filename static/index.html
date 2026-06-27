@@ -229,7 +229,7 @@ function render(d) {
   const color = COLORS[d.verdict_band] || COLORS.low;
 
   // provider pill
-  const pmap = { mock: "Mock", anthropic: "Claude", openai: "GPT" };
+  const pmap = { mock: "Mock", gemini: "Gemini", groq: "Groq" };
   $("providerPill").textContent = pmap[d.provider] || d.provider;
 
   // gauge: conic ring up to final_score
@@ -279,7 +279,7 @@ function escapeHtml(s) {
 
 // Show which engine is active on load.
 fetch("/health").then(r => r.json()).then(d => {
-  const pmap = { mock: "Mock", anthropic: "Claude", openai: "GPT" };
+  const pmap = { mock: "Mock", gemini: "Gemini", groq: "Groq" };
   $("providerPill").textContent = pmap[d.provider] || d.provider;
 }).catch(() => {});
 </script>
