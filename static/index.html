@@ -91,6 +91,10 @@
   .gauge .score { font-size: 26px; font-weight: 700; line-height: 1; }
   .gauge .of { font-size: 10px; color: var(--muted); margin-top: 2px; }
   .verdict-meta { flex: 1; }
+  .level-banner {
+    font-size: 20px; font-weight: 800; letter-spacing: .01em;
+    margin-bottom: 6px; line-height: 1.2;
+  }
   .badge {
     display: inline-block; padding: 4px 11px; border-radius: 999px;
     font-size: 12px; font-weight: 700; color: #fff;
@@ -141,6 +145,7 @@
           </div>
         </div>
         <div class="verdict-meta">
+          <div class="level-banner" id="levelBanner"></div>
           <span class="badge" id="riskBadge">—</span>
           <div class="summary" id="summary"></div>
         </div>
@@ -225,12 +230,23 @@ async function analyze() {
   }
 }
 
+const LEVEL_MAP = {
+  low:    { label: "✅ 可信",       color: "#1e8e3e" },
+  medium: { label: "⚠️ 可疑",       color: "#f9ab00" },
+  high:   { label: "🎣 一百趴釣魚", color: "#d93025" },
+};
+
 function render(d) {
   const color = COLORS[d.verdict_band] || COLORS.low;
+  const level = LEVEL_MAP[d.verdict_band] || LEVEL_MAP.low;
 
   // provider pill
   const pmap = { mock: "Mock", gemini: "Gemini", groq: "Groq" };
   $("providerPill").textContent = pmap[d.provider] || d.provider;
+
+  // level banner
+  $("levelBanner").textContent = level.label;
+  $("levelBanner").style.color = level.color;
 
   // gauge: conic ring up to final_score
   const deg = Math.round((d.final_score / 100) * 360);
