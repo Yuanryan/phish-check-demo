@@ -1,0 +1,16 @@
+From: "Microsoft Account Team" <no-reply@m1cr0soft.com>
+Reply-To: no-reply@m1cr0soft.com
+To: employee@ecloudvalley.com
+Subject: Action required: reset your password immediately
+Authentication-Results: mx.google.com; spf=pass smtp.mailfrom=m1cr0soft.com; dkim=pass; dmarc=pass
+
+Dear Microsoft user,
+
+Unusual sign-in activity was detected on your Microsoft account.
+To protect your account, you must verify your identity and reset your password immediately.
+
+Please sign in to https://m1cr0soft.com/account/recover and follow the instructions.
+
+If you do not act within 24 hours, your account will be suspended.
+
+Microsoft Account Security

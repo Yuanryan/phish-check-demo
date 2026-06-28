@@ -1,0 +1,16 @@
+From: "PayPal Security Center" <security@paypals-support.cf>
+Reply-To: security@paypals-support.cf
+Return-Path: <bounce@paypals-support.cf>
+To: user@ecloudvalley.com
+Subject: Your PayPal account has been limited - verify now
+Content-Type: text/html
+Authentication-Results: mx.google.com; spf=fail smtp.mailfrom=paypals-support.cf; dkim=none; dmarc=fail
+
+<html><body>
+<p>Dear PayPal Customer,</p>
+<p>We have noticed suspicious activity on your account and have temporarily limited your access.
+To restore full access, please verify your identity by clicking the button below immediately.</p>
+<p><a href="http://198.51.100.77/paypal/verify">www.paypal.com/verify-identity</a></p>
+<p>If you do not verify within 24 hours, your account will be permanently suspended.</p>
+<p>— PayPal Security Team</p>
+</body></html>

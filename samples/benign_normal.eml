@@ -1,0 +1,23 @@
+From: "Alice Wang" <alice.wang@ecloudvalley.com>
+Reply-To: alice.wang@ecloudvalley.com
+Return-Path: <alice.wang@ecloudvalley.com>
+To: bob.lin@ecloudvalley.com
+Subject: Q3 project update - meeting notes attached
+Date: Sun, 28 Jun 2026 09:30:00 +0800
+Authentication-Results: mx.google.com; spf=pass smtp.mailfrom=ecloudvalley.com; dkim=pass header.d=ecloudvalley.com; dmarc=pass
+
+Hi Bob,
+
+Thanks for joining the sync yesterday. Here's a quick summary of what we covered:
+
+1. The Q3 roadmap is on track — dev team confirmed the new module ships by July 15.
+2. Marketing will prepare the launch materials by end of next week.
+3. We'll schedule a final review meeting for July 10.
+
+Please review the updated project tracker here:
+https://drive.ecloudvalley.com/projects/q3-roadmap
+
+Let me know if you have any questions. See you at the stand-up on Tuesday.
+
+Best,
+Alice
