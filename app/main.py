@@ -18,10 +18,9 @@ from .parser import parse_email
 from .rules import run_rules
 from .schema import AnalyzeRequest, AnalyzeResponse, band_for
 
-load_dotenv()
-logging.basicConfig(level=logging.INFO)
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
+logging.basicConfig(level=logging.INFO)
 STATIC_DIR = BASE_DIR / "static"
 
 app = FastAPI(title="PhishCheck", description="LLM phishing-risk triage demo")
